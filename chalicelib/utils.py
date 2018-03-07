@@ -15,23 +15,24 @@ class ManifestIO:
     :url: (str) base url for FireCloud (FC) workspaces
     :workspace: (str) FC workspace (does not need to exist)
     :namespace: (str) FC namespace
-    :token: (str) filename of bearer token to authenticate to FC
+    :auth: (str) filename of bearer token to authenticate to FC
     """
 
-    def __init__(self, flo, url, workspace, namespace, token):
-        self.df = pd.read_csv(flo, sep='\t')  # create dataframe
-        self.url = url + '/' + namespace + '/' + workspace
+    def __init__(self, flo,
+                 url=None, workspace=None, namespace=None, auth=None):
+        self.df = pd.read_csv(flo, sep='\t')  # create Pandas dataframe
+        if url is not None:
+            self.url = url + '/' + namespace + '/' + workspace
         self.workspace = workspace
         self.namespace = namespace
-        self.token = token  # private
+        self.auth = auth  # private
 
     def workspace_exists(self):
         """Returns true if FireCloud workspace in the specified namespace
         exists, otherwise false.
         """
         headers = dict(Accept='application/json',
-                       Authorization=self.token)
-                       #Authorization='Bearer ' + self.token)
+                       Authorization=self.auth)
         r = requests.get(self.url, headers=headers)
         if r.status_code == 200:
             return True
@@ -45,7 +46,7 @@ class ManifestIO:
         url = self._prune_url()
         payload = self._make_payload()
         headers = {
-            'Authorization': self.token,
+            'Authorization': self.auth,
             'Accept': 'application/json',
             'Content-Type': 'application/json'
         }
@@ -64,7 +65,7 @@ class ManifestIO:
 
     def import_tsv_to_fc(self):
         """
-        Returns a tuple containting the a "participant" dataframe
+        Returns a tuple containing the a "participant" dataframe
         (which needs to be uploaded first), and a dataframe "df",
         which is technically is the "sample" dataset, and which
         needs to be uploaded after the participant, to be
@@ -73,7 +74,7 @@ class ManifestIO:
         :param url: (str)
         :param payload: (dict)
         :param tsv_fname: (str)
-        :param token: (str)
+        :param auth: (str)
         :param df: (Pandas dataframe)
         :return: response objects
         """
@@ -86,8 +87,12 @@ class ManifestIO:
         participant, sample = self._transform_df()
         _url = '/importEntities'
         url = self.url + _url
-        bearer_token = self.token
-        # Create file-like object (stream) from the dataframe.
+        # Header for both request calls.
+        headers = {
+            'Authorization': self.auth,
+            'Accept': 'application/json'
+        }
+        # Create file-like object (stream) from the Pandas dataframe.
         participant_buf = io.StringIO()
         participant.to_csv(
             path=participant_buf,
@@ -97,10 +102,6 @@ class ManifestIO:
         )
         participant_buf.seek(0)
         files = {'entities': participant_buf}
-        headers = {
-            'Authorization': bearer_token,
-            'Accept': 'application/json'
-        }
         r1 = requests.post(url, files=files, headers=headers)
         sample_buf = io.StringIO()
         sample.to_csv(
@@ -111,10 +112,6 @@ class ManifestIO:
         )
         sample_buf.seek(0)
         files = {'entities': sample_buf}
-        headers = {
-            'Authorization': bearer_token,
-            'Accept': 'application/json'
-        }
         r2 = requests.post(url, files=files, headers=headers)
         return {"participant": r1.status_code,
                 "sample": r2.status_code}

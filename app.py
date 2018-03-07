@@ -2,7 +2,6 @@ import logging
 import os
 import zipfile
 import io
-# import pandas as pd
 from chalice import Chalice, Response
 from chalicelib.utils import ManifestIO
 
@@ -25,12 +24,9 @@ def exportBag():
     workspace = req_query_params['workspace']
     namespace = req_query_params['namespace']
     url = 'https://api.firecloud.org/api/workspaces'
-    # token = os.getenv("TOKEN", None)
-    token = req_headers['Authorization']
-    manifest_io = ManifestIO(tsv_fname, url, workspace, namespace, token)
+    auth = req_headers['Authorization']
+    manifest_io = ManifestIO(tsv_fname, url, workspace, namespace, auth)
     statusCode = manifest_io.import_tsv_to_fc()
-    # tf = os.path.isfile(upload1)
-    # return Response(body={'status': tf},
     return Response(body=statusCode,
                     status_code=200,
                     headers={'Content-Type': 'application/json',

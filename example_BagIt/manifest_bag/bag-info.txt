@@ -1,0 +1,6 @@
+Bag-Software-Agent: bagit.py v1.6.3 <https://github.com/LibraryOfCongress/bagit-python>
+Bagging-Date: 2018-01-30
+Payload-Oxum: 190557.39
+data_type: TOPMed
+date_created: 2018-01-25
+organization: commons
