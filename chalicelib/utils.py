@@ -1,37 +1,49 @@
 #!/usr/bin/env python
 
 import requests
-import pandas as pd
 import io
+import pandas as pd
 
 
 class ManifestIO:
     """
-    Handles a metadata manifest from Boardwalk, created by the
-    user, reformats it, creates a workspace in a namespace of
-    of Broad's FireCloud analysis platform.
+    Handles manifest downloaded from a metadata portal
+    by the user. Has methods that check for workspace existence,
+    creates a new workspace, and uploads two files pointed to in
+    the payload into a namespace on Broad's FireCloud analysis platform.
 
-    :flo: (str) a binary file-like object of the TSV metadata file
+    :payload: (list) of strings representing paths to
+              participant (element [0])
+              and sample (element [1])
     :url: (str) base url for FireCloud (FC) workspaces
     :workspace: (str) FC workspace (does not need to exist)
     :namespace: (str) FC namespace
-    :token: (str) filename of bearer token to authenticate to FC
+    :auth: (str) filename of bearer token to authenticate to FC
+
+    TODO: - check whether list has two elements
+          - check which of those elements contains the participant,
+            and which the sample, such that we do not need to hardcode
+            it
+          - programmatically check identity and validity of files
+            pointed to in payload (independ of naming)
+          - avoid writing to TSVs to disk altogether
     """
 
-    def __init__(self, flo, url, workspace, namespace, token):
-        self.df = pd.read_csv(flo, sep='\t')  # create dataframe
-        self.url = url + '/' + namespace + '/' + workspace
+    def __init__(self, data,
+                 url=None, workspace=None, namespace=None, auth=None):
+        self.data = data
+        if url is not None:
+            self.url = url + '/' + namespace + '/' + workspace
         self.workspace = workspace
         self.namespace = namespace
-        self.token = token  # private
+        self.auth = auth  # private
 
     def workspace_exists(self):
         """Returns true if FireCloud workspace in the specified namespace
         exists, otherwise false.
         """
         headers = dict(Accept='application/json',
-                       Authorization=self.token)
-                       #Authorization='Bearer ' + self.token)
+                       Authorization=self.auth)
         r = requests.get(self.url, headers=headers)
         if r.status_code == 200:
             return True
@@ -40,12 +52,12 @@ class ManifestIO:
 
     def standup_workspace(self):
         """
-        Create workspace in specified namespace.
+        Creates workspace in specified namespace.
         """
         url = self._prune_url()
         payload = self._make_payload()
         headers = {
-            'Authorization': self.token,
+            'Authorization': self.auth,
             'Accept': 'application/json',
             'Content-Type': 'application/json'
         }
@@ -64,30 +76,28 @@ class ManifestIO:
 
     def import_tsv_to_fc(self):
         """
-        Returns a tuple containting the a "participant" dataframe
-        (which needs to be uploaded first), and a dataframe "df",
-        which is technically is the "sample" dataset, and which
-        needs to be uploaded after the participant, to be
-        in FireCloud-compliant format to be uploaded.
-
-        :param url: (str)
-        :param payload: (dict)
-        :param tsv_fname: (str)
-        :param token: (str)
-        :param df: (Pandas dataframe)
-        :return: response objects
+        Uploads "participant", a Pandas Series (which needs
+        to be uploaded first), and a dataframe "sample" (which
+        needs to be uploaded after "participant") to the FC
+        workspace.
         """
         # Check whether the workspace exists in this namespace,
         # otherwise create it.
         if not self.workspace_exists():
             self.standup_workspace()
 
-        # Transform the dataframe to make it compatible with FireCloud.
-        participant, sample = self._transform_df()
+        # Create FC endpoint for TSV file upload.
         _url = '/importEntities'
         url = self.url + _url
-        bearer_token = self.token
-        # Create file-like object (stream) from the dataframe.
+
+        # Header for both request calls.
+        headers = {
+            'Authorization': self.auth,
+            'Accept': 'application/json'
+        }
+
+        # Upload "participant (as Pandas Series).
+        participant = pd.read_csv(self.data[0], sep='\t', squeeze=True)
         participant_buf = io.StringIO()
         participant.to_csv(
             path=participant_buf,
@@ -97,11 +107,10 @@ class ManifestIO:
         )
         participant_buf.seek(0)
         files = {'entities': participant_buf}
-        headers = {
-            'Authorization': bearer_token,
-            'Accept': 'application/json'
-        }
         r1 = requests.post(url, files=files, headers=headers)
+
+        # Upload "sample".
+        sample = pd.read_csv(self.data[1], sep='\t')
         sample_buf = io.StringIO()
         sample.to_csv(
             path_or_buf=sample_buf,
@@ -111,61 +120,9 @@ class ManifestIO:
         )
         sample_buf.seek(0)
         files = {'entities': sample_buf}
-        headers = {
-            'Authorization': bearer_token,
-            'Accept': 'application/json'
-        }
         r2 = requests.post(url, files=files, headers=headers)
         return {"participant": r1.status_code,
                 "sample": r2.status_code}
-
-    def _transform_df(self):
-        """Transforms dataframe df for FireCloud upload and returns
-        two dataframes, a tuple of participant and sample, which are then
-        uploaded to FireCloud in that order.
-        """
-        df = self.df
-        # Remove all spaces from column headers and make lower case.
-        df.rename(columns=lambda x: x.replace(" ", "_"), inplace=True)
-        df.rename(columns=lambda x: x.lower(), inplace=True)
-        # Start normalizing the table. First, slice by file type.
-        df1 = df[df['file_type'] == 'crai']
-        df2 = df[['file_type',
-                  'file_path',
-                  'upload_file_id']][df['file_type'] == 'cram']
-        df2.rename(index=str,
-                   columns={'file_type': 'file_type2',
-                            'file_path': 'file_path2',
-                            'upload_file_id': 'upload_file_id2'},
-                   inplace=True)
-        frames = [df1, df2]  # merge both frames
-        for frame in frames:
-            frame.reset_index(drop=True, inplace=True)
-        # Second, by combining df1 and df2 we obtain a normalized table,
-        # using the index from df1.
-        df_new = pd.concat(frames, axis=1, join_axes=[df1.index])
-        df_new.drop_duplicates(keep='first', inplace=True)
-        # Create a table with only one column (donor will be participant
-        # in FC).
-        participant = df_new['donor_uuid']  # extract one column
-        participant.name = 'entity:participant_id'  # rename column header
-
-        # Re-order index of dataframe to be compliant with FireCloud
-        # specifications.
-        new_index = ([11, 4, 3, 7, 5, 6, 8, 9, 10, 12, 13, 14] +
-                     [0, 1, 2, 18, 19, 15, 16, 17, 20, 21, 22])
-        L = df_new.columns.tolist()
-        new_col_order = [L[x] for x in new_index]
-        df_new = df_new.reindex(columns=new_col_order)
-        sample = df_new.rename(
-            index=str,
-            columns={'sample_uuid': 'entity:sample_id',
-                     'donor_uuid': 'participant_id',
-                     'file_type': 'file_type1',
-                     'file_path': 'file_path1',
-                     'upload_file_id': 'upload_file_id1',
-                     'metadata.json': 'metadata_json'})
-        return participant, sample
 
     def _make_payload(self):
         payload = dict(zip(
