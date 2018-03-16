@@ -27,8 +27,8 @@ def exportBag():
     with zipfile.ZipFile(io.BytesIO(req_body), 'r') as archive:
         archive.extractall()
     payload = []
-    payload.append('/tmp/manifest_lambda/data/participant.tsv')
-    payload.append('/tmp/manifest_lambda/data/sample.tsv')
+    payload.append('/tmp/manifest/data/participant.tsv')
+    payload.append('/tmp/manifest/data/sample.tsv')
     workspace = req_query_params['workspace']
     namespace = req_query_params['namespace']
     url = 'https://api.firecloud.org/api/workspaces'
