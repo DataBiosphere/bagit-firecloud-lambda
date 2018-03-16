@@ -7,11 +7,12 @@ import pandas as pd
 
 class ManifestIO:
     """
-    Handles a metadata manifest downloaded from a data portal
-    by the user, creates a workspace in a namespace on Broad's
-    FireCloud analysis platform.
+    Handles manifest downloaded from a metadata portal
+    by the user. Has methods that check for workspace existence,
+    creates a new workspace, and uploads two files pointed to in
+    the payload into a namespace on Broad's FireCloud analysis platform.
 
-    :payload: (list) of BytesIO file-objects of
+    :payload: (list) of strings representing paths to
               participant (element [0])
               and sample (element [1])
     :url: (str) base url for FireCloud (FC) workspaces
@@ -23,6 +24,9 @@ class ManifestIO:
           - check which of those elements contains the participant,
             and which the sample, such that we do not need to hardcode
             it
+          - programmatically check identity and validity of files
+            pointed to in payload (independ of naming)
+          - avoid writing to TSVs to disk altogether
     """
 
     def __init__(self, data,
@@ -48,7 +52,7 @@ class ManifestIO:
 
     def standup_workspace(self):
         """
-        Create workspace in specified namespace.
+        Creates workspace in specified namespace.
         """
         url = self._prune_url()
         payload = self._make_payload()
@@ -72,18 +76,10 @@ class ManifestIO:
 
     def import_tsv_to_fc(self):
         """
-        Returns a tuple containing the a "participant" dataframe
-        (which needs to be uploaded first), and a dataframe "df",
-        which is technically is the "sample" dataset, and which
-        needs to be uploaded after the participant, to be
-        in FireCloud-compliant format to be uploaded.
-
-        :param url: (str)
-        :param payload: (dict)
-        :param tsv_fname: (str)
-        :param auth: (str)
-        :param df: (Pandas dataframe)
-        :return: response objects
+        Uploads "participant", a Pandas Series (which needs
+        to be uploaded first), and a dataframe "sample" (which
+        needs to be uploaded after "participant") to the FC
+        workspace.
         """
         # Check whether the workspace exists in this namespace,
         # otherwise create it.
