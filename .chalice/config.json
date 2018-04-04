@@ -3,7 +3,16 @@
   "app_name": "bagit-firecloud-lambda",
   "stages": {
     "dev": {
-      "api_gateway_stage": "api"
+      "api_gateway_stage": "api",
+      "environment_variables": {
+	"HOME":"/tmp"
+      }
+    }
+    "staging": {
+      "api_gateway_stage": "api",
+	"HOME":"/tmp"
+      }
     }
   }
 }
+
