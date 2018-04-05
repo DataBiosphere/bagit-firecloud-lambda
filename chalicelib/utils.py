@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 
 import requests
-import io
-import pandas as pd
 
 
 class ManifestIO:
@@ -25,7 +23,7 @@ class ManifestIO:
             and which the sample, such that we do not need to hardcode
             it
           - programmatically check identity and validity of files
-            pointed to in payload (independ of naming)
+            pointed to in payload (independent of naming)
           - avoid writing to TSVs to disk altogether
     """
 
@@ -96,31 +94,16 @@ class ManifestIO:
             'Accept': 'application/json'
         }
 
-        # Upload "participant (as Pandas Series).
-        participant = pd.read_csv(self.data[0], sep='\t', squeeze=True)
-        participant_buf = io.StringIO()
-        participant.to_csv(
-            path=participant_buf,
-            sep='\t',
-            index=False,
-            header=True
-        )
-        participant_buf.seek(0)
-        files = {'entities': participant_buf}
-        r1 = requests.post(url, files=files, headers=headers)
+        # Upload "participant.
+        with open(self.data[0], 'rb') as f:
+            files = {'entities': f}
+            r1 = requests.post(url, files=files, headers=headers)
 
         # Upload "sample".
-        sample = pd.read_csv(self.data[1], sep='\t')
-        sample_buf = io.StringIO()
-        sample.to_csv(
-            path_or_buf=sample_buf,
-            sep='\t',
-            index=False,
-            header=True
-        )
-        sample_buf.seek(0)
-        files = {'entities': sample_buf}
-        r2 = requests.post(url, files=files, headers=headers)
+        with open(self.data[1], 'rb') as f:
+            files = {'entities': f}
+            r2 = requests.post(url, files=files, headers=headers)
+
         return {"participant": r1.status_code,
                 "sample": r2.status_code}
 
