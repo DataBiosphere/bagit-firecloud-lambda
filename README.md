@@ -9,7 +9,7 @@ A staging instance is currently stood up at `https://vzltaytzg4.execute-api.us-w
 ## Using the service
 
 ```
-curl -X POST --header "Authorization: Bearer <Google token>" -header "Content-type: application/octet-stream" --data @bagit.zip "https://vzltaytzg4.execute-api.us-west-2.amazonaws.com/api/exportBag?workspace=<workspace>&namespace=<namespace>" 
+curl -X POST --header "Authorization: Bearer <Google token>" --header "Content-type: application/octet-stream" --data-binary @bagit.zip "https://vzltaytzg4.execute-api.us-west-2.amazonaws.com/api/exportBag?workspace=<workspace>&namespace=<namespace>" 
 ```
 
 * Google token -- a Google oauth token. This is used when making the FireCloud API calls. The FireCloud API currently
