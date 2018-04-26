@@ -2,6 +2,9 @@
 
 import requests
 from chalice import Response
+from urllib3 import Retry
+from requests.adapters import HTTPAdapter
+from requests import Session
 
 
 class ManifestIO:
@@ -18,8 +21,6 @@ class ManifestIO:
     :workspace: (str) FC workspace (does not need to exist)
     :namespace: (str) FC namespace
     :auth: (str) filename of bearer token to authenticate to FC
-    :statusCode: (dict) dictionary holding the status codes of all HTTP
-                 responses
 
     TODO: - check whether list has two elements
           - check which of those elements contains the participant,
@@ -44,17 +45,32 @@ class ManifestIO:
         }
 
     def workspace_exists(self):
-        """Returns true if FireCloud workspace in the specified namespace
-        exists, otherwise false.
-        """
+        """Returns requests response object. Status code is 200 if FireCloud 
+        workspace in the specified workspace exists, or 404 if it doesn't."""
         url = self.workspace_url
         headers = dict(Accept='application/json',
                        Authorization=self.auth)
-        return requests.get(url=url, headers=headers)
+        # Start a session with 3 GET retries.
+        s = Session()
+
+        # The reason for the 401 in status_forcelist is because we
+        # have seen it occurring in FC requests.
+        s.mount('https://', HTTPAdapter(
+            max_retries=Retry(total=4,
+                              backoff_factor=1,
+                              raise_on_status=False,
+                              status_forcelist=[401, 500, 502, 503, 504])
+        ))
+        resp = s.get(url=url, headers=headers)
+
+        return resp
 
     def manage_workspace(self, response):
         """Go through cases of the response from `workspace_exists`, and
-        take appropriate action."""
+        take appropriate action.
+        
+        :response: a request response object
+        """
         if response.status_code == 200:
             # Workspace exists.
             self.status_codes['workspace_exists'] = response.status_code
@@ -67,11 +83,8 @@ class ManifestIO:
                 self.status_codes['stood_up_workspace'] = \
                     r_create.status_code
             else:  # something went wrong when creating workspace
-                body, headers = check_headers(r_create)
-                return Response(
-                    body=body,
-                    headers=headers
-                )
+                return requests_response_to_chalice_Response(r_create)
+
                 # TODO: this could be due to another user having created a workspace
                 # with that name, so ideally we should not abort here but loop back...
         else:
@@ -80,11 +93,7 @@ class ManifestIO:
             # such as workspace name is invalid / not present / not authorized
             # (401, 403) or backend is having issues (5xx) such as possibly
             # an illegal workspace name (probably some 4xx).
-            body, headers = check_headers(response)
-            return Response(
-                body=body,
-                headers=headers
-            )
+            return requests_response_to_chalice_Response(response)
 
     def upload_files(self, tsv_file_list):
         for filename in tsv_file_list:
@@ -93,11 +102,8 @@ class ManifestIO:
                 self.status_codes[filename + '_upload'] = r_import.status_code
                 self.status_codes['workspace_url'] = r_import.url
             else:
-                body, headers = check_headers(r_import)
-                return Response(
-                    body=body,
-                    headers=headers
-                )
+                return requests_response_to_chalice_Response(r_import)
+
 
     def _standup_workspace(self):
         """
@@ -144,6 +150,19 @@ class ManifestIO:
 
 
 # Standalone utility functions.
+
+def requests_response_to_chalice_Response(response):
+    """Takes some attributes from a request response object and creates
+    a Chalice Response object from it.
+    
+    :param response: (response object) from requests module 
+    :return: Chalice module Response object 
+    """
+
+    body, headers = check_headers(response)
+    return Response(body=body,
+                    headers=headers,
+                    status_code=response.status_code)
 
 def check_headers(response):
     """Check if HTTP response header contains the `Content-Type` attribute."""

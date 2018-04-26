@@ -3,7 +3,7 @@
 import unittest
 import os
 from unittest import mock
-from chalicelib.utils import ManifestIO, check_headers
+from chalicelib.utils import ManifestIO, requests_response_to_chalice_Response
 
 base_path = os.path.abspath(os.path.dirname(__file__))
 
@@ -45,7 +45,7 @@ class TestManifestIO(unittest.TestCase):
             )
         return mock_resp
 
-    @mock.patch('requests.get')
+    @mock.patch.object(ManifestIO, 'workspace_exists')
     def test_workspace_exists(self, mock_get):
 
         mock_resp = self._mock_response()
@@ -54,7 +54,7 @@ class TestManifestIO(unittest.TestCase):
         result = self.mani.workspace_exists()
         self.assertTrue(mock_get(), result)
 
-    @mock.patch('requests.get')
+    @mock.patch.object(ManifestIO, 'workspace_exists')
     def test_workspace_does_not_exists(self, mock_get):
 
         msg = (str.join('/', (self.mani.namespace,
@@ -100,10 +100,11 @@ class TestManifestIO(unittest.TestCase):
         args = {
           "statusCode": 400,
           "source": "FireCloud",
-          "timestamp": 1523378011717,
+          "timestamp": 1,
           "causes": [],
           "stackTrace": [],
-          "message": "Duplicated entities are not allowed in TSV: 09df7aef-246a-57eb-9685-e1d4d18b55ab"
+          "message": "Duplicated entities are not allowed in TSV: " 
+                     "09df7aef-246a-57eb-9685-e1d4d18b55ab"
         }
 
         mock_resp = self._mock_response(status=400, json_data=args)
@@ -112,131 +113,19 @@ class TestManifestIO(unittest.TestCase):
         result = self.mani._import_tsv_to_fc('participant')
 
         self.longMessage = True
-        self.assertEqual(first=mock_post(), second=result, msg=args['message'])
+        self.assertEqual(first=mock_post(), second=result)
 
+    @mock.patch('chalicelib.utils.Retry')
+    def test_retry(self, retry_mock):
+        """Try urllib3 retry directly."""
+        mock_response = self._mock_response(status=500)
+        retry_mock.return_value = mock_response
 
-def mocked_requests_get(url, headers):
-    """Create a mock response object to replace `requests.get`."""
-    class MockResponse:
-        def __init__(self, headers, json_data, status_code):
-            self.headers = headers
-            self.json_data = json_data
-            self.status_code = status_code
-        # To mock JSON data in a response object we create a function.
-        def json(self):
-            return self.json_data
+        self.mani.workspace_url = 'http://httpbin.org/status/500'
 
-    return MockResponse(headers={"Content-Type": "application/json"},
-                        json_data={"key1": "value1"},
-                        status_code=201)
-
-def mocked_requests_post(url, json, headers):
-    """Mock a post requests such as in `_standup_workspace`."""
-    class MockResponse:
-        def __init__(self, headers, json_data, status_code):
-            self.headers = headers
-            self.json_data = json_data
-            self.status_code = status_code
-        # To mock JSON data in a response object we create a function.
-        def json(self):
-            return self.json_data
-
-    return MockResponse(headers={"Content-Type": "application/json"},
-                        json_data={"key1": "value1"},
-                        status_code=201)
-
-def mock_with_json(status_code):
-    """Create a mock response object to replace `requests.get`
-    that has a JSON object as an attribute. This is usually the case
-    for 201 and 404 status codes."""
-    class MockResponse:
-        def __init__(self, headers, json_data, status_code):
-            self.headers = headers
-            self.json_data = json_data
-            self.status_code = status_code
-
-        def json(self):
-            return self.json_data
-
-    if status_code == 200: # workspace exists
-        return MockResponse(headers={"Content-Type": "application/json"},
-                            json_data={'key1': 'value1'},
-                            status_code=200)
-    elif status_code == 404: # does not exist
-        return MockResponse(headers={"Content-Type": "application/json"},
-                            json_data={'key1': 'value1'},
-                            status_code=404)
-def mock_with_text():
-    """Create a mock response object to replace `requests.get`."""
-    class MockResponse:
-        def __init__(self, headers, text, status_code):
-            self.headers = headers
-            self.text = text
-            self.status_code = status_code
-
-    return MockResponse(headers={
-        "Content-Type": "text/html; charset=iso-8859-1"},
-                        text='some text',
-                        status_code=401)
-
-
-
-class TestUtils(unittest.TestCase):
-    @mock.patch('chalicelib.utils.requests.get',
-                side_effect=mocked_requests_get)
-    def test_check_headers_with_json(self, mock_get):
-        mani_args = {'data': None,
-                     'url': 'https://api.firecloud.org/api/workspaces',
-                     'workspace': 'test',
-                     'namespace': 'firecloud-cgl',
-                     'auth': None
-                     }
-        mani = ManifestIO(**mani_args)
-        r = mani.workspace_exists()
-        self.assertEqual(r.json(), {"key1": "value1"})
-
-        body, headers = check_headers(r)
-        self.assertEqual(body, {"key1": "value1"})
-        self.assertEqual(headers, {"Content-Type": "application/json"})
-
-    def test_check_headers_with_text(self):
-        """Mocks a failed FC requests returning a 401."""
-        response = mock_with_text()
-
-        body, headers = check_headers(response)
-        self.assertEqual(body, 'some text')
-        self.assertEqual(headers,
-                         {"Content-Type": "text/html; charset=iso-8859-1"})
-
-    @mock.patch('chalicelib.utils.requests.post',
-               side_effect=mocked_requests_post)
-    def test_manage_workspace(self, mock_post):
-        mani_args = {'data': None,
-                     'url': 'https://api.firecloud.org/api/workspaces',
-                     'workspace': 'test',
-                     'namespace': 'firecloud-cgl',
-                     'auth': None
-                     }
-        # Workspace exists.
-        mani1 = ManifestIO(**mani_args)
-        r1 = mock_with_json(200)
-        mani1.manage_workspace(r1)
-        self.assertEqual(mani1.status_codes['workspace_exists'],
-                         r1.status_code)
-        self.assertFalse(mani1.status_codes['stood_up_workspace'], False)
-
-        # Workspace doesn't exist.
-        mani2 = ManifestIO(**mani_args)
-        r2 = mock_with_json(404)
-        mani2.manage_workspace(r2)
-        self.assertEqual(mani2.status_codes['workspace_exists'],
-                         r2.status_code)
-        # Create workspace successfully.
-        mani3 = ManifestIO(**mani_args)
-        r3 = mani3._standup_workspace()
-        self.assertEqual(r3.json(), {"key1": "value1"})
-        self.assertEqual(r3.status_code, 201)
-
+        resp = self.mani.workspace_exists()
+        self.assertEqual(retry_mock.return_value.status_code, resp.status_code)
+        assert retry_mock.called
 
 if __name__ == '__main__':
     unittest.main()
