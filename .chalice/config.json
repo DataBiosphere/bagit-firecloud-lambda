@@ -5,13 +5,13 @@
     "dev": {
       "api_gateway_stage": "api",
       "environment_variables": {
-	"HOME":"/tmp"
+        "HOME": "/tmp"
       }
     },
     "staging": {
       "api_gateway_stage": "api",
       "environment_variables": {
-	"HOME":"/tmp"
+        "HOME": "/tmp"
       }
     }
   }

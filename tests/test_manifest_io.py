@@ -3,7 +3,8 @@
 import unittest
 import os
 from unittest import mock
-from chalicelib.utils import ManifestIO, requests_response_to_chalice_Response
+from chalicelib.manifest_io import ManifestIO
+from urllib3 import Retry
 
 base_path = os.path.abspath(os.path.dirname(__file__))
 
@@ -12,8 +13,8 @@ class TestManifestIO(unittest.TestCase):
     # Use fixtures.
     def setUp(self):
         data = {
-            'participant': base_path + '/test_participant.tsv',
-            'sample': base_path + '/test_sample.tsv'
+            'participant': base_path + '/data/test_participant.tsv',
+            'sample': base_path + '/data/test_sample.tsv'
         }
         url = 'https://api.firecloud.org/api/workspaces'
         workspace = 'test_workspace'
@@ -58,8 +59,8 @@ class TestManifestIO(unittest.TestCase):
     def test_workspace_does_not_exists(self, mock_get):
 
         msg = (str.join('/', (self.mani.namespace,
-                              self.mani.workspace)) +
-        'does not exist')
+                              self.mani.workspace))
+               + 'does not exist')
         args = {'causes': [],
                 'message': msg,
                 'source': 'rawls',
@@ -93,8 +94,8 @@ class TestManifestIO(unittest.TestCase):
 
         # Put TSV files containing duplicate records into manifest object.
         self.mani.data = {
-            'participant': base_path + '/test_participant_duplicate.tsv',
-            'sample': base_path + '/test_sample_duplicate.tsv'
+            'participant': base_path + '/data/test_participant_duplicate.tsv',
+            'sample': base_path + '/data/test_sample_duplicate.tsv'
         }
 
         args = {
@@ -115,13 +116,13 @@ class TestManifestIO(unittest.TestCase):
         self.longMessage = True
         self.assertEqual(first=mock_post(), second=result)
 
-    @mock.patch('chalicelib.utils.Retry')
+    @mock.patch('chalicelib.manifest_io.Retry')
     def test_retry(self, retry_mock):
         """Try urllib3 retry directly."""
-        mock_response = self._mock_response(status=500)
+        mock_response = self._mock_response(status=503)
         retry_mock.return_value = mock_response
 
-        self.mani.workspace_url = 'http://httpbin.org/status/500'
+        self.mani.workspace_url = 'http://httpstat.us/503'
 
         resp = self.mani.workspace_exists()
         self.assertEqual(retry_mock.return_value.status_code, resp.status_code)

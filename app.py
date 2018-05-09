@@ -3,7 +3,7 @@ import os
 import zipfile
 import io
 from chalice import Chalice, Response
-from chalicelib.utils import ManifestIO
+from chalicelib.manifest_io import ManifestIO
 
 
 app = Chalice(app_name='bagit-firecloud-lambda')

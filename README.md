@@ -6,8 +6,15 @@ A staging instance is currently stood up at `https://vzltaytzg4.execute-api.us-w
 
 ![alt text](diagram.svg "schematic flow representation")
 
-## Using the service
+## Deployment
+We're using the [Chalice microframework](https://chalice.readthedocs.io/en/latest/index.html) to stand up the Lambda. If you want to deploy your own AWS Lambda you need to have an AWS account and your system needs to be configured (see [AWS docs](https://docs.aws.amazon.com/cli/latest/userguide/installing.html) for details). Chalice requires Python 3.6 to be installed on your system. Then follow these steps:
 
+1. Clone [this](https://github.com/DataBiosphere/bagit-firecloud-lambda) repository to your local system and `cd bagit-firecloud-lambda`. 
+
+2. Run `make deploy-dev` or `make deploy-staging` (or both). 
+
+This will install one or two stages of the Lambda. After you run `make deploy-dev` (or `make deploy-staging`) a subdirectory `.venvbag` has been created in that directory. If you want to delete any of them run the `chalice` command inside that virtual environment, for instance, `.venvbag/bin/chalice delete --stage dev` to delete the `dev` stage. 
+## Using the service
 ```
 curl -X POST --header "Authorization: Bearer <Google token>" --header "Content-type: application/octet-stream" --data-binary @bagit.zip "https://vzltaytzg4.execute-api.us-west-2.amazonaws.com/api/exportBag?workspace=<workspace>&namespace=<namespace>" 
 ```

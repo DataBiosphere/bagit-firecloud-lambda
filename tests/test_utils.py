@@ -2,8 +2,9 @@
 
 import unittest
 from unittest import mock
-from chalicelib.utils import ManifestIO, check_headers, \
+from chalicelib.utils import check_headers, \
     requests_response_to_chalice_Response
+from chalicelib.manifest_io import ManifestIO
 from collections import Mapping
 
 
@@ -98,7 +99,7 @@ class TestUtils(unittest.TestCase):
         self.assertEqual(headers,
                          {"Content-Type": "text/html; charset=iso-8859-1"})
 
-    @mock.patch('chalicelib.utils.requests.post',
+    @mock.patch('chalicelib.manifest_io.requests.post',
                side_effect=mocked_requests_post)
     def test_manage_workspace(self, mock_post):
         mani_args = {'data': None,
