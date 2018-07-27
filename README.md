@@ -2,7 +2,7 @@
 
 This  [AWS Lambda](https://aws.amazon.com/lambda/) accepts a POST with a  [BagIt](https://en.wikipedia.org/wiki/BagIt) in the request body, and uploads TSVs from the bagit to FireCloud. Once FireCloud adds an endpoint that directly accepts a BagIt, this lambda will be unnecessary.
 
-A staging instance is currently stood up at `https://vzltaytzg4.execute-api.us-west-2.amazonaws.com/api/`.
+A staging instance is currently stood up at `https://cxbyrxcod8.execute-api.us-west-2.amazonaws.com/api/`.
 
 ![alt text](diagram.svg "schematic flow representation")
 
